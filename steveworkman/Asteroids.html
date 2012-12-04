@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title></title>
+<style type="text/css"> 
+	body {
+		background-color: #000000;
+		margin: 0px;
+		text-align:center;
+		overflow: hidden;
+	}
+	canvas {
+		background-color:#111133;
+	}
+
+</style>
+
+</head>
+<body>
+<script src="js/Vector2.js"></script>
+<script src="js/AsteroidSebs.js"></script>
+<script src="js/Bullet.js"></script>
+<script src="js/ShipMoving.js"></script>
+<script src="js/SimpleParticle.js"></script>
+<script>
+
+var canvas,
+ 	c; // c is the canvas' context 2D
+
+setupCanvas();
+
+var mouseX, mouseY, topScore = 0,
+	TO_DEGREES = Math.PI/180;
+	halfWidth = canvas.width/2, 
+	halfHeight = canvas.height/2,
+	bullets = [],
+	asteroids = [],
+	spareAsteroids = [],
+	particles = [],
+	ship = new ShipMoving(halfWidth, halfHeight),
+	thrusting = false,
+	decelerating = false,
+	rotateLeft = false, 
+	rotateRight = false,
+	gameOver = false,
+	endExplosionLimit = 20,
+	asteroidCount = 0,
+	score = 0,
+	endGameCounter = 0; 
+
+topScore = getTopScore();
+
+for(var i = 0; i<16; i++) {
+	
+	asteroids[i] = new Asteroid(randomRange(0,canvas.width), randomRange(0, canvas.height), 50);
+	asteroids[i].vel.reset(randomRange(-5,5),randomRange(-5,5));  
+	asteroidCount++;
+}	
+
+setInterval(draw, 1000/35); 
+
+canvas.addEventListener( 'mousemove', onMouseMove, false );
+canvas.addEventListener( 'mousedown', onMouseDown, false );
+document.addEventListener( 'keydown', onKeyDown, false );
+document.addEventListener( 'keyup', onKeyUp, false );
+
+
+function draw() {
+
+	c.clearRect(0,0,canvas.width, canvas.height); 
+	if (asteroidCount == 0) {
+		c.font = '40pt Consolas';
+		c.fillStyle = 'white';
+      	c.fillText('Winner!', halfWidth-120, halfHeight);
+      	c.font = '16pt Consolas';
+      	c.fillText("Score: "+score, halfWidth-80, halfHeight+ 40);
+      	if (topScore < score) {
+	      		saveTopScore(score);
+	      	}
+      	endGameCounter++;
+      	if (endGameCounter % 20 == 0) {
+      		explosion(randomRange(halfWidth-120, halfWidth+60), randomRange(halfHeight-40, halfHeight+40), endGameCounter, randomRange(0.6, 2.5));
+      	}
+	} else {
+		// Show Asteroid count
+		c.font = '16pt Consolas';
+		c.fillStyle = 'white';
+      	c.fillText('Asteroids: '+asteroidCount, 0, 16);
+      	c.fillText("Score: "+score, 0, 32);
+      	c.fillText("Top Score: "+topScore, 0, 48);
+
+		// Draw Asteroids
+		for(var i = 0; i< asteroids.length; i++) {
+			
+			var asteroid = asteroids[i]; 
+			
+			if(!asteroid.enabled) continue; 
+			
+			asteroid.update(canvas); 
+			asteroid.draw(c); 
+		}
+		
+		if (!gameOver) {
+			// Key events
+			if(thrusting) ship.thrust(); 
+			if(decelerating) ship.decelerate(); 
+			if(rotateLeft) ship.rotateLeft(); 
+			if(rotateRight) ship.rotateRight(); 
+			
+			// Draw ship
+			ship.update(); 
+			with(ship.pos) {
+				if(x<0) x = canvas.width; 
+				else if(x>canvas.width) x = 0;
+				if(y<0) y = canvas.height; 
+				else if (y>canvas.height) y = 0; 
+			}
+			ship.draw(c, thrusting, decelerating);
+
+			// Asteroid/ship collision detection
+			for(var j = 0; j<asteroids.length; j++)	{
+				var asteroid = asteroids[j]; 
+				if(!asteroid.enabled) continue;
+				if(asteroid.hitTest(ship.pos.x, ship.pos.y)) {
+					gameOver = true;
+					var i=0;
+					while(i < endExplosionLimit) {
+						explosion(randomRange(ship.pos.x-50, ship.pos.x+50), randomRange(ship.pos.y-20, ship.pos.y+40), 0, 3);
+						i++;
+					}
+				}
+			}
+
+			// bullet draw code and asteroid collision detection
+			for (var i=0; i<bullets.length;i++) {
+				bullet = bullets[i]; 
+
+				if (!bullet.enabled) continue;
+
+				bullet.update(); 
+				bullet.draw(c);
+
+				for(var j = 0; j<asteroids.length; j++)	{
+				
+					var asteroid = asteroids[j]; 
+					if(!asteroid.enabled) continue; 
+					
+					if(asteroid.hitTest(bullet.pos.x, bullet.pos.y)) {
+						bullet.enabled = false;
+
+						// Make an explosion
+						explosion(bullet.pos.x, bullet.pos.y, bullet.hue);
+						score++;
+
+						if(asteroid.radius<15)  {
+							asteroid.enabled = false; 
+							asteroidCount--;
+						}
+						else {
+							
+							asteroid.reset(asteroid.radius/2);
+							asteroid.vel.reset(randomRange(-5,5),randomRange(-5,5));
+							
+							var newasteroid = makeNewAsteroid(asteroid.pos.x, asteroid.pos.y, asteroid.radius); 
+							newasteroid.vel.reset(randomRange(-5,5),randomRange(-5,5));
+							asteroidCount++;
+							// change vels so that they seem to rebound off each other. 
+							
+						}
+						break; 
+					}
+				}	
+			}
+
+
+		} else {
+			c.font = '40pt Consolas';
+			c.fillStyle = 'white';
+	      	c.fillText('Game Over', halfWidth-150, halfHeight);
+	      	if (topScore < score) {
+	      		saveTopScore(score);
+	      	}
+		}
+
+		
+	}
+	// Render explosions
+		for(var j = 0; j<particles.length; j++)	{
+			var p = particles[j]; 
+			if(!p.enabled) continue;
+			p.render(c);
+			p.update();
+		}
+}
+
+function makeNewAsteroid(x,y,radius) {
+	var newasteroid; 
+	
+	if(spareAsteroids.length>0) {
+		newasteroid = spareAsteroids.pop(); 
+		newasteroid.pos.reset(x,y); 
+		newasteroid.radius = radius; 	
+	}
+	else 
+	{
+		newasteroid = new Asteroid(x,y,radius); 
+		asteroids.push(newasteroid); 
+	}
+	
+	
+	return newasteroid;
+} 
+
+function explosion(x,y,hue, scale) {
+	scale = scale || 1;
+	for (var angle=0; angle<360; angle+=30) {
+		var p = new Particle(x,y);
+		p.vel = new Vector2(Math.cos(angle)*10, Math.sin(angle)*10);
+		p.fade = 0.1;
+		p.size = 5*scale;
+		p.hue = hue;
+		particles.push(p);
+	}
+}
+
+function onKeyDown(e) {	
+	if(e.keyCode == 38 || e.keyCode == 87) thrusting = true; 
+	else if (e.keyCode == 40 || e.keyCode == 83) decelerating = true; 
+	else if (e.keyCode == 37 || e.keyCode == 65) rotateLeft = true; 
+	else if (e.keyCode == 39 || e.keyCode == 68) rotateRight = true; 
+	
+}
+function onKeyUp(e) {
+	if(e.keyCode == 38 || e.keyCode == 87) thrusting = false; 
+	else if (e.keyCode == 40 || e.keyCode == 83) decelerating = false; 
+	else if (e.keyCode == 37 || e.keyCode == 65) rotateLeft = false; 
+	else if (e.keyCode == 39 || e.keyCode == 68) rotateRight = false;
+	else if (e.keyCode == 32) fire();
+}
+
+function fire() {
+	var bullet;
+	var hue = bullets.length*20;
+	if (score > 10) {
+		var offset1 = new Vector2(0,8);
+		offset1.rotate(ship.angle);
+		offset1.plusEq(ship.pos);
+		bullet = new Bullet(offset1.x, offset1.y, ship.angle * TO_DEGREES, ship.vel, hue);
+		bullets.push(bullet);
+	}
+	if (score > 25) {
+		var offset1 = new Vector2(0,-8);
+		offset1.rotate(ship.angle);
+		offset1.plusEq(ship.pos);
+		bullet = new Bullet(offset1.x, offset1.y, ship.angle * TO_DEGREES, ship.vel, hue);
+		bullets.push(bullet);
+	}
+	
+	var offset2 = new Vector2(0,0);
+	offset2.rotate(ship.angle);
+	offset2.plusEq(ship.pos);
+	bullet = new Bullet(offset2.x, offset2.y, ship.angle * TO_DEGREES, ship.vel, hue);
+	bullets.push(bullet);
+}
+
+function onMouseMove(event) {
+
+	if(event.offsetX){
+		mouseX = event.offsetX;
+		mouseY = event.offsetY;
+	} else {
+		// for browsers that don't support offsetX and offsetY (Fx)
+		mouseX = event.pageX - event.target.offsetLeft; 
+		mouseY = event.pageY - event.target.offsetTop; 
+	}
+
+}
+
+function onMouseDown() {
+	fire();
+}
+
+function setupCanvas() {
+	
+	canvas = document.createElement( 'canvas' );
+	c = canvas.getContext( '2d' );
+	canvas.width = window.innerWidth; 
+	canvas.height = window.innerHeight; 
+	document.body.appendChild( canvas );
+	
+	c.strokeStyle = "#ffffff";
+	c.lineWidth = 2;
+}
+
+function randomRange(v1, v2){
+	return ((Math.random()*(v2-v1))+v1);
+}
+
+function saveTopScore(score) {
+	window.localStorage.setItem("topScore", score);
+}
+function getTopScore() {
+	var valoutput ;
+	if(typeof(window.localStorage) != 'undefined'){ 
+		return topScore || window.localStorage.getItem("topScore"); 
+	} 
+	else{ 
+		throw "window.localStorage, not defined"; 
+	}
+}
+
+
+</script>
+</body>
+</html>
