@@ -1,0 +1,168 @@
+<!DOCTYPE HTML>
+<html lang="en"> 
+<meta charset="utf-8"> 
+	<head>
+	<title> Particles!</title>
+	<style type="text/css"> 
+		body { 
+			background-color:black; 
+			margin:0px; 
+			overflow : hidden; 
+		}
+		</style> 
+	</head>
+	
+	<body>
+		<script src="js/Vector2.js"></script>
+		<script>
+
+//create the canvas element, and add it to the document DOM
+var canvas = document.createElement('canvas');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+document.body.appendChild(canvas);
+
+//add a mouse listener, and use mouse position to rotate star field
+canvas.addEventListener( 'mousemove', onMouseMove, false );
+var lastMouse;
+function onMouseMove(event) {
+	var x,y = 0;
+	if(event.offsetX){
+		x = event.offsetX;
+		y = event.offsetY;
+	} else {
+		// for browsers that don't support offsetX and offsetY (Fx)
+		x = event.pageX - event.target.offsetLeft; 
+		y = event.pageY - event.target.offsetTop; 
+	}
+	if (lastMouse) cam.move((x-lastMouse.x)/5, (y-lastMouse.y)/5, 0);
+	lastMouse = {x:x, y:y};
+}
+
+//grab a reference to the 2d context - used for all drawing calls
+var context = canvas.getContext('2d');
+
+//set an interval for 30 frame per second, used to draw the each frame of the anim
+setInterval(loop, 1000/30);
+
+//cache the window size (note: will not handle changes in window size)
+var windowWidth = window.innerWidth;
+var windowHeight = window.innerHeight;
+
+//declare and instantiate a camera object to track view angle of star field
+function Camera() {
+	this.translate = {x:0, y:0, z:-200};
+	this.rotate = {x:0, y:0, z:0};
+}
+Camera.prototype.move = function(x,y,z) {
+	this.rotate.x += x;
+	this.rotate.y += y;
+	this.rotate.z += z;
+}
+var cam = new Camera();
+
+//track all stars created to date (using basic 'Particle' code)
+var particles = [];
+function loop() {
+
+	//progressively dim previous canvas contents - produce nice 'trails' effect
+	context.fillStyle = 'rgba(0,0,0,0.2)';
+	context.fillRect(0, 0, windowWidth, windowHeight);
+
+	//gradually add more stars (one per frame) until limit reached
+	if (particles.length < 500) {
+		var p = new Particle({
+		  x: Math.round(random(-200,200)),
+		  y: Math.round(random(-200,200)),
+		  z: 200, //Math.round(random(-200,200)),
+		  xvel: 0,
+		  yvel: 0,
+		  zvel: -1,
+		  alpha: 1,
+		  fade: 1,
+		  width: 10,
+		  height: 10,
+		  drag: 1,
+		  gravity: 0,
+		  red:Math.round(random(0,255)),
+		  green:Math.round(random(0,255)),
+		  blue:Math.round(random(0,255)),
+		  bounce: 0,
+		});
+		particles.push(p);
+    }
+
+	//save context, re-position 0/0 to middle of screen, render, and restore (so clear process works)
+	context.save();
+	context.translate(windowWidth/2,windowHeight/2);
+	particles.sort(sort);
+	for (var i=0; i<particles.length; i++) {
+		particles[i].move(context);
+		particles[i].draw(context, cam.rotate, cam.translate);
+	}
+	context.restore();
+	counter++;
+}
+
+//Sort function to provide depth-sorting (prevent back items ocluding near items)
+function sort(a,b) {return b.z-a.z;};
+
+//utility function to generate a random number between two limits
+function random(min, max) {
+	return (Math.random()*(max-min)) + min;
+}
+
+//simple particle class to track location (x,y,z), velocity (x,y,z), and various render options
+function Particle(opt) {
+	this.x = opt.x || 10;
+	this.y = opt.y || 10;
+	this.z = opt.z || 1;
+	this.width = opt.width || 30;
+	this.height = opt.height || 20;
+	this.fade = opt.fade || 1;
+	this.xvel = opt.xvel || 0;
+	this.yvel = opt.yvel || 0;
+	this.zvel = opt.zvel || 0;
+	this.red = opt.red || 255;
+	this.green = opt.green || 255;
+	this.blue = opt.blue || 255;
+	this.alpha = opt.alpha || 1;
+	this.drag = opt.drag || 1;
+	this.gravity = opt.gravity || 0;
+	this.bounce = opt.bounce || 3.0;
+}
+Particle.prototype.draw = function(context, rotate, translate) {
+	var cameraRotation = rotate || {x:0,y:0,z:0};
+	var cameraTranslate = translate || {x:0, y:0, z:0};
+
+	var tmp = new Vector2(this.x-cameraTranslate.x, this.z-cameraTranslate.z);
+	tmp.rotate(cameraRotation.x);
+
+	var fov = 250;
+	var scale = fov/ (fov+tmp.y);
+	if (scale > 0) {
+		var color = 'rgba('+this.red+','+this.green+','+this.blue+','+this.alpha+')';
+		context.fillStyle = color;
+		context.fillRect(tmp.x*scale, this.y*scale, (this.width*scale), (this.height*scale));
+	} 
+
+	//when travelling towards camera, if it ends up 'behind' camera, move to back
+	if (fov/(fov+this.z) <= 0) {
+		this.z = fov;
+	}
+}
+Particle.prototype.move = function(context) {
+	this.alpha = this.alpha * this.fade;
+
+	//update positions by individual velocities
+	this.x += this.xvel;
+	this.y += this.yvel;
+	this.z += this.zvel;
+
+}
+		</script>			
+	</body>
+	
+	
+</html>
+	
