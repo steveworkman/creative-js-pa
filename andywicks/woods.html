@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title></title>
+<style type="text/css"> 
+	body {
+		background-color: #000000;
+		margin: 0px;
+		text-align:center;
+    overflow: hidden;
+	}
+	canvas {
+		background-color: #111133;/*#ddd;/*#111133;*/
+	}
+</style>
+
+
+</head>
+<body>
+<script>
+
+
+// canvas element and 2D context
+var canvas = document.createElement( 'canvas' ),
+	context = canvas.getContext( '2d' );
+
+WIDTH = canvas.width = window.innerWidth; 
+HEIGHT = canvas.height = window.innerHeight;
+document.body.appendChild(canvas);
+console.log(HEIGHT);
+
+// CONFIG SETTINGS //
+var minTreeHeight = 30;
+var maxTreeHeight = 80;
+
+// ensure that a tree will never be higher than the window height
+if (maxTreeHeight>=HEIGHT/5){
+ maxTreeHeight = (HEIGHT/5) * 0.95;
+ minTreeHeight = 0.6 * maxTreeHeight;
+}
+
+var minBranchAngle = 5;
+var maxBranchAngle = 40;
+var numTrees =3;
+var treeOnBase = true;
+
+var generation = 0;
+var mouseX = 0, 
+  mouseY = 0;
+canvas.addEventListener( 'mousedown', onMouseDown, false );
+canvas.addEventListener( 'mousemove', onMouseMove, false );
+var	c = context,
+	TO_RADIANS = Math.PI/180; 
+
+c.strokeStyle = "#ffffff";
+
+var trees = [];
+
+var xPos = 0;
+var xGap = 0;
+
+function load(){
+  for (i=0;i<numTrees;i++)
+  {
+    xGap = WIDTH/(numTrees);
+    xPos = xGap/2 + (i*xGap);
+    trees[i] = new Tree(xPos, HEIGHT);
+    trees[i].render();
+  }
+}
+
+
+load();
+
+setInterval(update, 1000/30);
+
+
+function update(){
+  c.clearRect(0,0, WIDTH, HEIGHT);
+  
+  for(i=0;i<trees.length;i++)
+  {
+    tree = trees[i];
+    tree.render();
+  }
+
+}
+
+
+function Tree(treeX, treeY){
+
+ this.x = treeX;
+ if(treeOnBase){
+ this.y = HEIGHT;
+ }else{
+ this.y = treeY;
+ }
+ this.minBranchLength = random(minTreeHeight / 5, maxTreeHeight / 6);
+ this.growthRate = random(0.1, 0.3);
+ this.branch = new Branch(random(minTreeHeight, maxTreeHeight), 0, this.growthRate, this.minBranchLength);
+ 
+ 
+ 
+ this.render = function(){
+    c.save();
+    c.translate(this.x, this.y);
+    this.branch.render();
+    //  render branches
+    c.restore();
+ }
+}
+
+
+function Branch(length, angle, growthRate, minBranchLength){
+	
+  var children = this.children = [];
+  var counter = 0,
+      delay = generation * 2,
+      growth = 0,
+      swaySpeed = random(0.01, 0.1);
+  generation++;
+  var gen = generation;
+
+		
+	if(length>minBranchLength){
+    children.push(new Branch(length*random(0.7, 0.8), random(minBranchAngle,maxBranchAngle), growthRate, minBranchLength));
+    children.push(new Branch(length*random(0.7, 0.8), -random(minBranchAngle,maxBranchAngle), growthRate, minBranchLength));
+	}
+  
+  this.render = function() { 
+  if(delay>0){
+    delay--;
+  }else{
+    growth+=((1-growth)*growthRate); //0.05);
+  }
+   
+    var blen = length*growth;
+    
+    c.save();
+    c.strokeStyle = 'white';
+    c.lineCap = 'round';
+    c.lineWidth = blen/10;
+    c.beginPath();
+    c.rotate((angle + (Math.sin(counter)*2)) * Math.PI/180)
+    c.moveTo(0,0);
+    c.translate(0, -blen);
+    c.lineTo(0,0);
+    c.strokeStyle = "hsl("+00+(gen*6)+", 60%,35%)";
+    c.stroke();
+    
+    // recurse to add more bits to the trunk
+    for(var i=0; i<children.length;i++){
+      children[i].render();
+    }
+    if(children.length==0)
+    {
+      c.arc(0,0,2, 0, Math.PI*2, true);
+      c.strokeStyle='pink';
+      c.strokeRect(0,0,2,2);
+    }
+  
+    
+    c.restore();
+    counter+=swaySpeed;
+    
+  }
+  
+  generation--;
+}
+
+function onMouseDown(){
+  numTrees++;
+  trees.push(new Tree(mouseX, mouseY));
+
+}
+
+function onMouseMove(event) {
+
+	if(event.offsetX){
+		mouseX = event.offsetX;
+		mouseY = event.offsetY;
+	} else {
+		// for browsers that don't support offsetX and offsetY (Fx)
+		mouseX = event.pageX - event.target.offsetLeft; 
+		mouseY = event.pageY - event.target.offsetTop; 
+	}
+
+}
+
+function random(v1, v2){
+	return ((Math.random()*(v2-v1))+v1);
+	
+}
+
+
+</script>
+</body>
+</html>
